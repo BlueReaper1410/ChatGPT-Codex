@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>VESSEL // Builder</title>
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<div id="canvas-wrap"><canvas id="c"></canvas></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="bar-brand">VESSEL</div>
+  <div class="bar-info">BLOCKS <span id="info-count">0</span></div>
+  <div class="bar-info">POS <span id="info-pos">—</span></div>
+  <div class="bar-spacer"></div>
+  <button class="bar-btn" id="btn-map" onclick="toggleStarmap()">MAP</button>
+  <button class="bar-btn launch" id="btn-launch" onclick="toggleLaunchMode()">▶ LAUNCH</button>
+  <button class="bar-btn" onclick="openSettings()">⚙ SETTINGS</button>
+  <button class="bar-btn" onclick="exportJSON()">⬇ EXPORT</button>
+  <button class="bar-btn danger" onclick="clearAll()">✕ CLEAR</button>
+</div>
+
+<div id="starmap-overlay">
+  <div id="starmap-panel">
+    <div class="starmap-head">
+      <div>
+        <div class="starmap-title">SECTOR MAP</div>
+        <div class="starmap-sub">CLICK A SYSTEM TO TARGET IT</div>
+      </div>
+      <button class="modal-close" onclick="closeStarmap()">âœ•</button>
+    </div>
+    <canvas id="starmap-canvas" width="820" height="460"></canvas>
+    <div class="starmap-foot">
+      <div>
+        <div class="starmap-meta">TARGET</div>
+        <div id="starmap-target-name">NONE</div>
+        <div id="starmap-target-note">Select a nearby system to align and hyperdrive toward it.</div>
+      </div>
+      <div class="starmap-actions">
+        <button class="modal-btn" id="starmap-mode-btn" onclick="toggleStarmapMode()">SYSTEM VIEW</button>
+        <button class="modal-btn" onclick="pointShipToSelectedSystem()">POINT SHIP</button>
+        <button class="modal-btn" onclick="attemptHyperdrive()">TOGGLE DRIVE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LEFT: TOOLS -->
+<div id="panel-left">
+  <button class="tool-btn active" id="t-add" onclick="setTool('add')" title="Add [A]">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect x="7" y="2" width="2" height="12"/><rect x="2" y="7" width="12" height="2"/></svg>
+  </button>
+  <div class="tool-label">ADD</div>
+  <div class="tool-sep"></div>
+  <button class="tool-btn" id="t-erase" onclick="setTool('erase')" title="Erase [E]">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 12 L6 4 L14 4 L14 12 Z M4 10 L12 10 L12 5 L5 5 Z"/></svg>
+  </button>
+  <div class="tool-label">ERASE</div>
+  <div class="tool-sep"></div>
+  <button class="tool-btn" id="t-paint" onclick="setTool('paint')" title="Paint [P]">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="11" r="2.5"/><path d="M5 8.5 L5 3 Q5 2 6 2 L11 2 Q13 2 13 4 L13 7 Q13 9 11 9 L6.5 9 Z M6 3 L6 8 L11 8 Q12 8 12 7 L12 4 Q12 3 11 3 Z"/></svg>
+  </button>
+  <div class="tool-label">PAINT</div>
+  <div class="tool-sep"></div>
+  <button class="tool-btn" id="t-select" onclick="setTool('select')" title="Select [S]">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3 L3 13 L6 10 L8 14 L9.5 13.3 L7.5 9.3 L11 9.3 Z"/></svg>
+  </button>
+  <div class="tool-label">VIEW</div>
+</div>
+
+<!-- RIGHT: BLOCKS -->
+<button id="toggle-right" onclick="toggleRight()">◧</button>
+<div id="panel-right">
+  <div class="panel-header">PART TYPE</div>
+  <div id="block-list"></div>
+  <div class="color-section">
+    <label>CUSTOM COLOR</label>
+    <input type="color" id="color-pick" value="#4488aa" onchange="setCustomColor(this.value)">
+  </div>
+</div>
+
+<!-- AXIS INDICATOR -->
+<canvas id="axis-canvas"></canvas>
+
+<!-- HINT -->
+<div id="hint">DRAG to orbit · SCROLL to zoom · TAP to place</div>
+
+<!-- BOTTOM STATUS -->
+<div id="statusbar">
+  <div class="status-group">
+    <span class="status-label">TOOL</span>
+    <span class="status-val" id="st-tool">ADD</span>
+  </div>
+  <div class="status-sep"></div>
+  <div class="status-group">
+    <span class="status-label">PART</span>
+    <span class="status-val" id="st-block">HULL</span>
+  </div>
+  <div class="status-sep"></div>
+  <div class="status-group">
+    <span class="status-label">ROT</span>
+    <span class="status-val" id="st-rot">0 0 0</span>
+  </div>
+  <div class="status-sep"></div>
+  <button class="action-btn" onclick="undo()">↩ UNDO</button>
+  <button class="action-btn" onclick="redo()">↪ REDO</button>
+  <div class="status-sep"></div>
+  <button class="action-btn" onclick="rotatePlacement('x')">ROT X</button>
+  <button class="action-btn" onclick="rotatePlacement('y')">ROT Y</button>
+  <button class="action-btn" onclick="rotatePlacement('z')">ROT Z</button>
+  <button class="action-btn" onclick="resetPlacementRotation()">ZERO ROT</button>
+  <div class="status-sep"></div>
+  <button class="action-btn accent" onclick="toggleGrid()">GRID</button>
+  <button class="action-btn" onclick="toggleSymmetry()">SYMMETRY <span id="sym-state">OFF</span></button>
+  <button class="action-btn" onclick="resetCamera()">RESET CAM</button>
+</div>
+
+<!-- FLIGHT HUD -->
+<div id="hud">
+  <div id="hud-top">
+    <div class="hud-block">
+      <div class="hud-label">SPEED</div>
+      <div class="hud-val" id="hud-speed">0.00</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">HULL</div>
+      <div class="hud-bar"><div class="hud-fill" id="hud-hull-fill" style="width:100%;background:var(--accent)"></div></div>
+      <div class="hud-val" id="hud-hull-val">100%</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">SHIELD</div>
+      <div class="hud-bar"><div class="hud-fill" id="hud-shield-fill" style="width:100%;background:var(--green)"></div></div>
+      <div class="hud-val" id="hud-shield-val">—</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">THREATS</div>
+      <div class="hud-val" id="hud-threats">0</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">SYSTEM</div>
+      <div class="hud-val" id="hud-system">ORBITAL</div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">DRIVE</div>
+      <div class="hud-val" id="hud-drive">READY</div>
+    </div>
+  </div>
+  <div id="hud-left">
+    <div class="hud-row"><span class="hud-row-label">MAIN</span><div class="hud-mini-bar"><div class="hud-mini-fill" id="thr-main" style="width:0%;background:var(--warn)"></div></div></div>
+    <div class="hud-row"><span class="hud-row-label">RCS</span><div class="hud-mini-bar"><div class="hud-mini-fill" id="thr-rcs" style="width:0%;background:var(--accent)"></div></div></div>
+  </div>
+  <div id="hud-center">
+    <svg width="44" height="44" viewBox="0 0 44 44" opacity="0.85">
+      <line x1="22" y1="4" x2="22" y2="15" stroke="#00e5ff" stroke-width="1.5"/>
+      <line x1="22" y1="29" x2="22" y2="40" stroke="#00e5ff" stroke-width="1.5"/>
+      <line x1="4" y1="22" x2="15" y2="22" stroke="#00e5ff" stroke-width="1.5"/>
+      <line x1="29" y1="22" x2="40" y2="22" stroke="#00e5ff" stroke-width="1.5"/>
+      <circle cx="22" cy="22" r="2.5" fill="none" stroke="#00e5ff" stroke-width="1.2"/>
+    </svg>
+  </div>
+  <div id="hud-right">
+    <div id="hud-weapon-lbl">WEAPON</div>
+    <div id="hud-weapon-st">READY</div>
+    <div id="hud-weapon-bar"><div id="hud-weapon-fill" style="width:100%"></div></div>
+  </div>
+  <div id="hud-controls">W/S THRUST | A/D STRAFE | SPACE/SHIFT LIFT | Q/E ROLL | LMB FIRE | J MOUSE LOCK | M STARMAP | H TOGGLE DRIVE | TAB EXIT</div>
+  <div id="hud-lock">LMB OR J TO LOCK MOUSE</div>
+  <div id="hud-alert"></div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="settings-overlay" onclick="settingsOverlayClick(event)">
+  <div id="settings-modal">
+    <div class="modal-header">
+      <span class="modal-title">⚙ CAMERA SETTINGS</span>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">INVERT Y AXIS</div>
+          <div class="setting-desc">Flip up / down orbit direction</div>
+        </div>
+        <div class="toggle-switch" id="tog-invert-y" onclick="toggleSetting('invertY')"></div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">INVERT X AXIS</div>
+          <div class="setting-desc">Flip left / right orbit direction</div>
+        </div>
+        <div class="toggle-switch" id="tog-invert-x" onclick="toggleSetting('invertX')"></div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">INVERT SCROLL ZOOM</div>
+          <div class="setting-desc">Reverse scroll-to-zoom direction</div>
+        </div>
+        <div class="toggle-switch" id="tog-invert-zoom" onclick="toggleSetting('invertZoom')"></div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">ORBIT SENSITIVITY</div>
+          <div class="setting-desc">Mouse / touch drag speed</div>
+        </div>
+        <input type="range" class="setting-slider" id="sl-sensitivity" min="30" max="200" value="100" oninput="setSensitivity(this.value)">
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">ZOOM SENSITIVITY</div>
+          <div class="setting-desc">Scroll wheel speed</div>
+        </div>
+        <input type="range" class="setting-slider" id="sl-zoom-sens" min="10" max="300" value="100" oninput="setZoomSensitivity(this.value)">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn" onclick="closeSettings()">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="src/state.js"></script>
+<script src="src/scene.js"></script>
+<script src="src/builder.js"></script>
+<script src="src/input.js"></script>
+<script src="src/world.js"></script>
+<script src="src/starmap.js"></script>
+<script src="src/launch.js"></script>
+<script src="src/flight.js"></script>
+<script src="src/combat.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/settings.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
