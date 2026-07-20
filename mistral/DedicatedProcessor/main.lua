@@ -52,6 +52,25 @@ function OnPlayerLeft(player)
 end
 
 ----------------------------------------------------------------------
+-- Chat command handler (using tm.playerUI.OnChatMessage)
+----------------------------------------------------------------------
+
+function OnChatMessage(senderName, message, color)
+    safeCall("OnChatMessage", function()
+        -- Check for our commands
+        if message == "/dp" then
+            ToggleUI()
+        elseif message == "/dphelp" then
+            pcall(function()
+                tm.playerUI.SendChatMessage(CHAT_NAME, "DedicatedProcessor Commands:")
+                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dp - Toggle UI")
+                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dphelp - Show this help")
+            end)
+        end
+    end)
+end
+
+----------------------------------------------------------------------
 -- Anti-lag cleanup (from your working Cholesterol code)
 ----------------------------------------------------------------------
 
@@ -192,24 +211,6 @@ function HandleInput()
 end
 
 ----------------------------------------------------------------------
--- Chat commands
-----------------------------------------------------------------------
-
-function OnChatCommand(command, args)
-    safeCall("OnChatCommand", function()
-        if command == "dp" then
-            ToggleUI()
-        elseif command == "dphelp" then
-            pcall(function()
-                tm.playerUI.SendChatMessage(CHAT_NAME, "DedicatedProcessor Commands:")
-                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dp - Toggle UI")
-                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dphelp - Show this help")
-            end)
-        end
-    end)
-end
-
-----------------------------------------------------------------------
 -- Update loop
 ----------------------------------------------------------------------
 
@@ -260,6 +261,6 @@ end)
 safeCall("Event registration", function()
     tm.players.OnPlayerJoined.add(OnPlayerJoined)
     tm.players.OnPlayerLeft.add(OnPlayerLeft)
-    tm.playerUI.AddChatCommandHandler(OnChatCommand)
+    tm.playerUI.OnChatMessage.add(OnChatMessage)
     tm.os.AddUpdateCallback(update)
 end)
