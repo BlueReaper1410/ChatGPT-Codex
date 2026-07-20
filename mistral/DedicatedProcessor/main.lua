@@ -1,5 +1,5 @@
 -- DedicatedProcessor - Main Module
--- Simple, robust mod with greetings, anti-lag, and basic UI
+-- Simple mod with greetings, anti-lag, and always-open UI for host
 
 local CHAT_NAME = "DedicatedProcessor"
 local GREET_DELAY = 5.0 -- seconds
@@ -25,9 +25,7 @@ end
 
 local pendingGreetings = {}
 local cleanUpTime = 0
-local modEnabled = true
 local antiLagEnabled = true
-local showUI = false
 
 ----------------------------------------------------------------------
 -- Chat greetings (from your working code)
@@ -52,25 +50,6 @@ function OnPlayerLeft(player)
 end
 
 ----------------------------------------------------------------------
--- Chat command handler (using tm.playerUI.OnChatMessage)
-----------------------------------------------------------------------
-
-function OnChatMessage(senderName, message, color)
-    safeCall("OnChatMessage", function()
-        -- Check for our commands
-        if message == "/dp" then
-            ToggleUI()
-        elseif message == "/dphelp" then
-            pcall(function()
-                tm.playerUI.SendChatMessage(CHAT_NAME, "DedicatedProcessor Commands:")
-                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dp - Toggle UI")
-                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dphelp - Show this help")
-            end)
-        end
-    end)
-end
-
-----------------------------------------------------------------------
 -- Anti-lag cleanup (from your working Cholesterol code)
 ----------------------------------------------------------------------
 
@@ -84,7 +63,7 @@ function CleanUp()
         
         if time > cleanUpTime then
             pcall(function()
-                tm.playerUI.AddSubtleMessageForAllPlayers("DedicatedProcessor", "Removed bad structures.", 5, "")
+                tm.playerUI.AddSubtleMessageForAllPlayers("DedicatedProcessor", "Destroyed junk structures.", 5, "")
             end)
             cleanUpTime = time + (math.random() * 60)
             
@@ -122,19 +101,17 @@ function CleanUp()
 end
 
 ----------------------------------------------------------------------
--- Simple UI for server host
+-- Simple UI for server host (always open)
 ----------------------------------------------------------------------
 
-function ToggleUI()
-    showUI = not showUI
-end
-
 function DrawUI()
-    if not showUI then
-        return
-    end
-    
     pcall(function()
+        -- Only show UI for the host (playerId 0 is typically the host)
+        local localPlayerId = tm.players.GetLocalPlayerId()
+        if localPlayerId ~= 0 then
+            return
+        end
+        
         local screenWidth, screenHeight = tm.playerUI.GetScreenSize()
         local windowX = (screenWidth - 300) / 2
         local windowY = (screenHeight - 200) / 2
@@ -153,8 +130,6 @@ function DrawUI()
         
         -- Draw status
         local y = windowY + 30
-        tm.playerUI.DrawText("Mod: " .. (modEnabled and "ON" or "OFF"), windowX + 10, y, 0.9, 0.9, 0.9)
-        y = y + 20
         tm.playerUI.DrawText("Anti-Lag: " .. (antiLagEnabled and "ON" or "OFF"), windowX + 10, y, 0.9, 0.9, 0.9)
         y = y + 20
         
@@ -166,20 +141,17 @@ function DrawUI()
         tm.playerUI.DrawRect(windowX + 10, y, buttonWidth, buttonHeight, 0.2, 0.2, 0.2, 0.8)
         tm.playerUI.DrawText("Toggle Anti-Lag", windowX + 10 + (buttonWidth - tm.playerUI.GetTextWidth("Toggle Anti-Lag") * 0.8) / 2, 
                              y + (buttonHeight - 20) / 2, 0.9, 0.9, 0.9, 1.0, 0.8)
-        
-        -- Close button
-        tm.playerUI.DrawRect(windowX + 10 + buttonWidth + 10, y, buttonWidth, buttonHeight, 0.2, 0.2, 0.2, 0.8)
-        tm.playerUI.DrawText("Close", windowX + 10 + buttonWidth + 10 + (buttonWidth - tm.playerUI.GetTextWidth("Close") * 0.8) / 2, 
-                             y + (buttonHeight - 20) / 2, 0.9, 0.9, 0.9, 1.0, 0.8)
     end)
 end
 
 function HandleInput()
-    if not showUI then
-        return
-    end
-    
     pcall(function()
+        -- Only handle input for the host
+        local localPlayerId = tm.players.GetLocalPlayerId()
+        if localPlayerId ~= 0 then
+            return
+        end
+        
         local mouseX, mouseY = tm.playerUI.GetMousePosition()
         local mouseDown = tm.playerUI.IsMouseButtonDown(0)
         
@@ -194,16 +166,11 @@ function HandleInput()
             -- Check if mouse is in window
             if relativeX >= 0 and relativeX <= 300 and relativeY >= 0 and relativeY <= 200 then
                 -- Toggle Anti-Lag button
-                if relativeY >= 70 and relativeY <= 100 and relativeX >= 10 and relativeX <= 130 then
+                if relativeY >= 50 and relativeY <= 80 and relativeX >= 10 and relativeX <= 130 then
                     antiLagEnabled = not antiLagEnabled
                     pcall(function()
                         tm.playerUI.SendChatMessage(CHAT_NAME, "Anti-Lag " .. (antiLagEnabled and "enabled" or "disabled"))
                     end)
-                end
-                
-                -- Close button
-                if relativeY >= 70 and relativeY <= 100 and relativeX >= 150 and relativeX <= 270 then
-                    showUI = false
                 end
             end
         end
@@ -240,7 +207,7 @@ function update()
         -- Run cleanup
         CleanUp()
         
-        -- Draw UI
+        -- Draw UI (always open for host)
         DrawUI()
         HandleInput()
     end)
@@ -261,6 +228,5 @@ end)
 safeCall("Event registration", function()
     tm.players.OnPlayerJoined.add(OnPlayerJoined)
     tm.players.OnPlayerLeft.add(OnPlayerLeft)
-    tm.playerUI.OnChatMessage.add(OnChatMessage)
     tm.os.AddUpdateCallback(update)
 end)
