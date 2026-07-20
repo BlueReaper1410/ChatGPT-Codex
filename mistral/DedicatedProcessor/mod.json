@@ -1,0 +1,8 @@
+{
+  "name": "DedicatedProcessor",
+  "version": "1.0.0",
+  "description": "Server utility mod with player greetings, DedicatedCleanup (antilag), and configurable UI",
+  "author": "Server Host",
+  "entry_point": "main.lua",
+  "dependencies": []
+}
