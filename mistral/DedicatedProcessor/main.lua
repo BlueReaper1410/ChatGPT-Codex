@@ -27,6 +27,7 @@ local pendingGreetings = {}
 local cleanUpTime = 0
 local antiLagEnabled = true
 local showUI = true -- Start open for host
+local hostName = "" -- Will be set on load
 
 ----------------------------------------------------------------------
 -- Chat greetings (from your working code)
@@ -51,14 +52,13 @@ function OnPlayerLeft(player)
 end
 
 ----------------------------------------------------------------------
--- Chat command handler (using tm.playerUI.OnChatMessage)
+-- Chat command handler (only for host)
 ----------------------------------------------------------------------
 
 function OnChatMessage(senderName, message, color)
     safeCall("OnChatMessage", function()
-        -- Only host can use commands
-        local localPlayerId = tm.players.GetLocalPlayerId()
-        if localPlayerId ~= 0 then
+        -- Only respond if the sender is the host
+        if senderName ~= hostName then
             return
         end
         
@@ -270,6 +270,9 @@ safeCall("OnModLoaded", function()
     pcall(function()
         tm.playerUI.AddSubtleMessageForAllPlayers("DedicatedProcessor", "DedicatedProcessor loaded...", 5, "")
     end)
+    
+    -- Set host name for command filtering
+    hostName = tm.players.GetPlayerName(0) or ""
 end)
 
 -- Register event handlers
