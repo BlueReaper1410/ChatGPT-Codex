@@ -26,6 +26,7 @@ end
 local pendingGreetings = {}
 local cleanUpTime = 0
 local antiLagEnabled = true
+local showUI = true -- Start open for host
 
 ----------------------------------------------------------------------
 -- Chat greetings (from your working code)
@@ -46,6 +47,31 @@ function OnPlayerLeft(player)
             return
         end
         pendingGreetings[player.playerId] = nil
+    end)
+end
+
+----------------------------------------------------------------------
+-- Chat command handler (using tm.playerUI.OnChatMessage)
+----------------------------------------------------------------------
+
+function OnChatMessage(senderName, message, color)
+    safeCall("OnChatMessage", function()
+        -- Only host can use commands
+        local localPlayerId = tm.players.GetLocalPlayerId()
+        if localPlayerId ~= 0 then
+            return
+        end
+        
+        -- Check for our commands
+        if message == "/dp" then
+            showUI = not showUI
+        elseif message == "/dphelp" then
+            pcall(function()
+                tm.playerUI.SendChatMessage(CHAT_NAME, "DedicatedProcessor Commands:")
+                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dp - Toggle UI")
+                tm.playerUI.SendChatMessage(CHAT_NAME, "  /dphelp - Show this help")
+            end)
+        end
     end)
 end
 
@@ -101,10 +127,18 @@ function CleanUp()
 end
 
 ----------------------------------------------------------------------
--- Simple UI for server host (always open)
+-- Simple UI for server host (starts open)
 ----------------------------------------------------------------------
 
+function ToggleUI()
+    showUI = not showUI
+end
+
 function DrawUI()
+    if not showUI then
+        return
+    end
+    
     pcall(function()
         -- Only show UI for the host (playerId 0 is typically the host)
         local localPlayerId = tm.players.GetLocalPlayerId()
@@ -141,10 +175,19 @@ function DrawUI()
         tm.playerUI.DrawRect(windowX + 10, y, buttonWidth, buttonHeight, 0.2, 0.2, 0.2, 0.8)
         tm.playerUI.DrawText("Toggle Anti-Lag", windowX + 10 + (buttonWidth - tm.playerUI.GetTextWidth("Toggle Anti-Lag") * 0.8) / 2, 
                              y + (buttonHeight - 20) / 2, 0.9, 0.9, 0.9, 1.0, 0.8)
+        
+        -- Close button
+        tm.playerUI.DrawRect(windowX + 10 + buttonWidth + 10, y, buttonWidth, buttonHeight, 0.2, 0.2, 0.2, 0.8)
+        tm.playerUI.DrawText("Close", windowX + 10 + buttonWidth + 10 + (buttonWidth - tm.playerUI.GetTextWidth("Close") * 0.8) / 2, 
+                             y + (buttonHeight - 20) / 2, 0.9, 0.9, 0.9, 1.0, 0.8)
     end)
 end
 
 function HandleInput()
+    if not showUI then
+        return
+    end
+    
     pcall(function()
         -- Only handle input for the host
         local localPlayerId = tm.players.GetLocalPlayerId()
@@ -171,6 +214,11 @@ function HandleInput()
                     pcall(function()
                         tm.playerUI.SendChatMessage(CHAT_NAME, "Anti-Lag " .. (antiLagEnabled and "enabled" or "disabled"))
                     end)
+                end
+                
+                -- Close button
+                if relativeY >= 50 and relativeY <= 80 and relativeX >= 150 and relativeX <= 270 then
+                    showUI = false
                 end
             end
         end
@@ -207,7 +255,7 @@ function update()
         -- Run cleanup
         CleanUp()
         
-        -- Draw UI (always open for host)
+        -- Draw UI
         DrawUI()
         HandleInput()
     end)
@@ -228,5 +276,6 @@ end)
 safeCall("Event registration", function()
     tm.players.OnPlayerJoined.add(OnPlayerJoined)
     tm.players.OnPlayerLeft.add(OnPlayerLeft)
+    tm.playerUI.OnChatMessage.add(OnChatMessage)
     tm.os.AddUpdateCallback(update)
 end)
