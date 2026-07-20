@@ -1,5 +1,5 @@
 -- DedicatedProcessor - Chat Module
--- Handles player greetings and custom chat messages
+-- Handles player greetings and custom chat messages for Trailmakers
 
 local utils = require("utils")
 local config = require("config")
@@ -8,50 +8,41 @@ local config = require("config")
 -- State
 ----------------------------------------------------------------------
 
--- playerId -> time (tm.os.GetTime()) at which the greeting should fire
 local pendingGreetings = {}
-
--- Time of last custom message broadcast
 local lastCustomMessageTime = 0
 
 ----------------------------------------------------------------------
 -- Chat functionality
 ----------------------------------------------------------------------
 
--- Greet a player
-local function greetPlayer(playerId)
-    if not config.getConfigValue("chat.greetNewPlayers") then
+local function GreetPlayer(playerId)
+    if not config.GetConfigValue("chat.greetNewPlayers") then
         return
     end
     
-    local name = utils.getPlayerName(playerId)
+    local name = utils.GetPlayerName(playerId)
     local message = "Welcome, " .. name .. "!"
-    
-    utils.sendChatMessage(message, utils.CHAT_COLOR, utils.CHAT_NAME)
+    utils.SendChatMessage(utils.CHAT_NAME, message, utils.CHAT_COLOR)
 end
 
--- Broadcast custom message to all players
-local function broadcastCustomMessage()
-    if not config.getConfigValue("chat.customMessageEnabled") then
+local function BroadcastCustomMessage()
+    if not config.GetConfigValue("chat.customMessageEnabled") then
         return
     end
     
-    local customMessage = config.getConfigValue("chat.customMessage")
+    local customMessage = config.GetConfigValue("chat.customMessage")
     if customMessage and customMessage ~= "" then
-        utils.sendChatMessage(customMessage, utils.CHAT_COLOR, utils.CHAT_NAME)
+        utils.SendChatMessage(utils.CHAT_NAME, customMessage, utils.CHAT_COLOR)
         lastCustomMessageTime = tm.os.GetTime()
-        config.setConfigValue("chat.lastCustomMessageTime", lastCustomMessageTime)
+        config.SetConfigValue("chat.lastCustomMessageTime", lastCustomMessageTime)
     end
 end
 
--- Send chat message from UI input
-function sendCustomChatMessage(message)
+function SendCustomChatMessage(message)
     if message and message ~= "" then
-        utils.sendChatMessage(message, utils.CHAT_COLOR, utils.CHAT_NAME)
-        
-        -- Save to config for persistence
-        config.setConfigValue("chat.customMessage", message)
-        config.setConfigValue("chat.customMessageEnabled", true)
+        utils.SendChatMessage(utils.CHAT_NAME, message, utils.CHAT_COLOR)
+        config.SetConfigValue("chat.customMessage", message)
+        config.SetConfigValue("chat.customMessageEnabled", true)
     end
 end
 
@@ -59,21 +50,21 @@ end
 -- Event handlers
 ----------------------------------------------------------------------
 
-function onPlayerJoined(player)
+function OnPlayerJoined(player)
     utils.safeCall("Chat.OnPlayerJoined", function()
-        if not utils.isValidPlayer(player) then
-            error("OnPlayerJoined called with no valid player/playerId")
+        if not utils.IsValidPlayer(player) then
+            return
         end
         
-        if config.getConfigValue("chat.greetNewPlayers") then
-            pendingGreetings[player.playerId] = tm.os.GetTime() + config.getConfigValue("chat.greetDelay")
+        if config.GetConfigValue("chat.greetNewPlayers") then
+            pendingGreetings[player.playerId] = tm.os.GetTime() + (config.GetConfigValue("chat.greetDelay") or 5.0)
         end
     end)
 end
 
-function onPlayerLeft(player)
+function OnPlayerLeft(player)
     utils.safeCall("Chat.OnPlayerLeft", function()
-        if not utils.isValidPlayer(player) then
+        if not utils.IsValidPlayer(player) then
             return
         end
         pendingGreetings[player.playerId] = nil
@@ -84,15 +75,15 @@ end
 -- Update function
 ----------------------------------------------------------------------
 
-function update()
-    utils.safeCall("Chat.update", function()
+function Update()
+    utils.safeCall("Chat.Update", function()
         local now = tm.os.GetTime()
         
         -- Process pending greetings
         local toClear = {}
         for playerId, greetTime in pairs(pendingGreetings) do
             if now >= greetTime then
-                greetPlayer(playerId)
+                GreetPlayer(playerId)
                 table.insert(toClear, playerId)
             end
         end
@@ -101,9 +92,9 @@ function update()
         end
         
         -- Check for custom message broadcast
-        local customInterval = config.getConfigValue("chat.customMessageInterval")
+        local customInterval = config.GetConfigValue("chat.customMessageInterval") or 300.0
         if customInterval > 0 and now >= (lastCustomMessageTime + customInterval) then
-            broadcastCustomMessage()
+            BroadcastCustomMessage()
         end
     end)
 end
@@ -114,8 +105,8 @@ end
 
 -- Register event handlers
 utils.safeCall("Chat registration", function()
-    tm.players.OnPlayerJoined.add(onPlayerJoined)
-    tm.players.OnPlayerLeft.add(onPlayerLeft)
+    tm.players.OnPlayerJoined.add(OnPlayerJoined)
+    tm.players.OnPlayerLeft.add(OnPlayerLeft)
 end)
 
 ----------------------------------------------------------------------
@@ -123,8 +114,8 @@ end)
 ----------------------------------------------------------------------
 
 return {
-    update = update,
-    sendCustomChatMessage = sendCustomChatMessage,
-    onPlayerJoined = onPlayerJoined,
-    onPlayerLeft = onPlayerLeft
+    Update = Update,
+    SendCustomChatMessage = SendCustomChatMessage,
+    OnPlayerJoined = OnPlayerJoined,
+    OnPlayerLeft = OnPlayerLeft
 }

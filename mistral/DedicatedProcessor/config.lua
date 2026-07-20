@@ -1,5 +1,5 @@
 -- DedicatedProcessor - Configuration System
--- Handles all mod settings with persistence
+-- Handles all mod settings with persistence for Trailmakers
 
 local utils = require("utils")
 
@@ -15,10 +15,10 @@ local DEFAULT_CONFIG = {
     chat = {
         enabled = true,
         greetNewPlayers = true,
-        greetDelay = 5.0, -- seconds
+        greetDelay = 5.0,
         customMessageEnabled = false,
         customMessage = "Welcome to the server!",
-        customMessageInterval = 300.0, -- 5 minutes
+        customMessageInterval = 300.0,
         lastCustomMessageTime = 0
     },
     
@@ -26,17 +26,15 @@ local DEFAULT_CONFIG = {
     cleanup = {
         enabled = true,
         subtleMessagesEnabled = true,
-        cleanupIntervalMin = 30, -- minimum seconds between cleanups
-        cleanupIntervalMax = 90, -- maximum seconds between cleanups
+        cleanupIntervalMin = 30,
+        cleanupIntervalMax = 90,
         lastCleanupTime = 0,
         structuresRemoved = 0
     },
     
     -- UI settings
     ui = {
-        showStatusMessages = true,
-        menuPosition = {x = 0.5, y = 0.5},
-        menuScale = 1.0
+        showStatusMessages = true
     }
 }
 
@@ -46,68 +44,18 @@ local DEFAULT_CONFIG = {
 
 local config = utils.deepCopy(DEFAULT_CONFIG)
 local configLoaded = false
-local configFilePath = "DedicatedProcessor_config.json"
+local configFilePath = "DedicatedProcessor_config.txt"
 
 ----------------------------------------------------------------------
--- Configuration loading and saving
+-- Simple serialization for Trailmakers
 ----------------------------------------------------------------------
 
--- Load configuration from file
-local function loadConfig()
-    local file = io.open(configFilePath, "r")
-    if file then
-        local content = file:read("*a")
-        file:close()
-        
-        -- Simple JSON parsing (Trailmakers Lua doesn't have built-in JSON)
-        -- We'll use a basic approach that works for our simple config
-        local success, loadedConfig = pcall(function()
-            -- Try to parse as Lua table (if saved as Lua)
-            local chunk = loadstring("return " .. content)
-            if chunk then
-                return chunk()
-            end
-            return nil
-        end)
-        
-        if success and loadedConfig and type(loadedConfig) == "table" then
-            config = utils.mergeTables(DEFAULT_CONFIG, loadedConfig)
-            utils.sendSuccessMessage("Configuration loaded", "Config")
-        else
-            -- Fallback to defaults
-            config = utils.deepCopy(DEFAULT_CONFIG)
-            utils.sendErrorMessage("Failed to load config, using defaults", "Config")
-        end
-    else
-        -- Create default config file
-        config = utils.deepCopy(DEFAULT_CONFIG)
-        saveConfig()
-    end
-    
-    configLoaded = true
-end
-
--- Save configuration to file
-function saveConfig()
-    local file = io.open(configFilePath, "w")
-    if file then
-        -- Save as Lua table (easier than implementing full JSON serializer)
-        local content = serialize(config)
-        file:write(content)
-        file:close()
-        utils.sendSuccessMessage("Configuration saved", "Config")
-    else
-        utils.sendErrorMessage("Failed to save config", "Config")
-    end
-end
-
--- Simple serializer for Lua tables
-local function serialize(tbl, indent)
+local function serializeTable(tbl, indent)
     indent = indent or 0
-    local str = ""
     local indentStr = string.rep("  ", indent)
+    local lines = {}
     
-    str = str .. "{\n"
+    table.insert(lines, indentStr .. "{")
     
     local keys = {}
     for k, _ in pairs(tbl) do
@@ -117,50 +65,179 @@ local function serialize(tbl, indent)
     
     for i, k in ipairs(keys) do
         local v = tbl[k]
-        str = str .. indentStr .. "  [" .. quote(tostring(k)) .. "] = "
+        local keyStr = "[" .. tostring(k) .. "]"
         
         if type(v) == "table" then
-            str = str .. serialize(v, indent + 2)
+            local subLines = {}
+            table.insert(subLines, serializeTable(v, indent + 1))
+            table.insert(lines, indentStr .. "  " .. keyStr .. " = " .. table.concat(subLines, ","))
         elseif type(v) == "string" then
-            str = str .. quote(v)
+            table.insert(lines, indentStr .. "  " .. keyStr .. " = \"" .. string.gsub(v, "\\", "\\\\").. "\"")
         elseif type(v) == "boolean" then
-            str = str .. (v and "true" or "false")
+            table.insert(lines, indentStr .. "  " .. keyStr .. " = " .. (v and "true" or "false"))
         elseif type(v) == "number" then
-            str = str .. tostring(v)
+            table.insert(lines, indentStr .. "  " .. keyStr .. " = " .. tostring(v))
         else
-            str = str .. "nil"
+            table.insert(lines, indentStr .. "  " .. keyStr .. " = nil")
         end
         
         if i < #keys then
-            str = str .. ","
+            lines[#lines] = lines[#lines] .. ","
         end
-        str = str .. "\n"
     end
     
-    str = str .. indentStr .. "}"
-    return str
+    table.insert(lines, indentStr .. "}")
+    return table.concat(lines, "\n")
 end
 
-local function quote(str)
-    return '"' .. string.gsub(tostring(str), '"', '\\"') .. '"'
+local function deserializeTable(str)
+    -- Simple parser for our format
+    local result = {}
+    local current = result
+    local stack = {result}
+    local i = 1
+    local len = #str
+    
+    while i <= len do
+        -- Skip whitespace
+        while i <= len and (str:sub(i,i) == " " or str:sub(i,i) == "\n" or str:sub(i,i) == "\t") do
+            i = i + 1
+        end
+        
+        if i > len then break end
+        
+        -- Check for closing brace
+        if str:sub(i,i) == "}" then
+            table.remove(stack)
+            current = stack[#stack]
+            i = i + 1
+        -- Check for opening brace
+        elseif str:sub(i,i) == "{" then
+            i = i + 1
+        -- Check for key
+        elseif str:sub(i,i) == "[" then
+            local j = i + 1
+            while j <= len and str:sub(j,j) ~= "]" do
+                j = j + 1
+            end
+            local key = str:sub(i+1, j-1)
+            i = j + 1
+            
+            -- Skip to equals
+            while i <= len and str:sub(i,i) ~= "=" do
+                i = i + 1
+            end
+            i = i + 1
+            
+            -- Skip whitespace
+            while i <= len and (str:sub(i,i) == " " or str:sub(i,i) == "\t") do
+                i = i + 1
+            end
+            
+            -- Get value
+            local value
+            if str:sub(i,i) == "\"" then
+                -- String
+                local j = i + 1
+                while j <= len and str:sub(j,j) ~= "\"" do
+                    j = j + 1
+                end
+                value = str:sub(i+1, j-1)
+                i = j + 1
+            elseif str:sub(i,i) == "t" then
+                -- true
+                value = true
+                i = i + 4
+            elseif str:sub(i,i) == "f" then
+                -- false
+                value = false
+                i = i + 5
+            elseif str:sub(i,i) == "n" then
+                -- nil
+                value = nil
+                i = i + 3
+            else
+                -- Number
+                local j = i
+                while j <= len and (str:sub(j,j):match("%d") or str:sub(j,j) == "." or str:sub(j,j) == "-") do
+                    j = j + 1
+                end
+                value = tonumber(str:sub(i, j-1))
+                i = j
+            end
+            
+            current[key] = value
+            
+            -- Check for comma
+            while i <= len and (str:sub(i,i) == " " or str:sub(i,i) == "\t" or str:sub(i,i) == "\n") do
+                i = i + 1
+            end
+            if i <= len and str:sub(i,i) == "," then
+                i = i + 1
+            end
+        else
+            i = i + 1
+        end
+    end
+    
+    return result
+end
+
+----------------------------------------------------------------------
+-- Configuration loading and saving
+----------------------------------------------------------------------
+
+function LoadConfig()
+    local file = io.open(configFilePath, "r")
+    if file then
+        local content = file:read("*a")
+        file:close()
+        
+        local success, loadedConfig = pcall(function()
+            return deserializeTable(content)
+        end)
+        
+        if success and loadedConfig and type(loadedConfig) == "table" then
+            config = utils.mergeTables(DEFAULT_CONFIG, loadedConfig)
+            utils.SendSuccessMessage("Configuration loaded", "Config")
+        else
+            config = utils.deepCopy(DEFAULT_CONFIG)
+            utils.SendErrorMessage("Failed to load config, using defaults", "Config")
+        end
+    else
+        config = utils.deepCopy(DEFAULT_CONFIG)
+        SaveConfig()
+    end
+    
+    configLoaded = true
+end
+
+function SaveConfig()
+    local file = io.open(configFilePath, "w")
+    if file then
+        local content = serializeTable(config)
+        file:write(content)
+        file:close()
+        utils.SendSuccessMessage("Configuration saved", "Config")
+    else
+        utils.SendErrorMessage("Failed to save config", "Config")
+    end
 end
 
 ----------------------------------------------------------------------
 -- Configuration accessors
 ----------------------------------------------------------------------
 
--- Get the entire config
-function getConfig()
+function GetConfig()
     if not configLoaded then
-        loadConfig()
+        LoadConfig()
     end
     return config
 end
 
--- Get a specific config value
-function getConfigValue(path)
+function GetConfigValue(path)
     if not configLoaded then
-        loadConfig()
+        LoadConfig()
     end
     
     local current = config
@@ -173,10 +250,9 @@ function getConfigValue(path)
     return current
 end
 
--- Set a specific config value
-function setConfigValue(path, value)
+function SetConfigValue(path, value)
     if not configLoaded then
-        loadConfig()
+        LoadConfig()
     end
     
     local current = config
@@ -194,14 +270,13 @@ function setConfigValue(path, value)
     end
     
     current[parts[#parts]] = value
-    saveConfig()
+    SaveConfig()
 end
 
--- Toggle a boolean config value
-function toggleConfigValue(path)
-    local currentValue = getConfigValue(path)
+function ToggleConfigValue(path)
+    local currentValue = GetConfigValue(path)
     if type(currentValue) == "boolean" then
-        setConfigValue(path, not currentValue)
+        SetConfigValue(path, not currentValue)
         return not currentValue
     end
     return false
@@ -211,19 +286,18 @@ end
 -- Module initialization
 ----------------------------------------------------------------------
 
--- Load config on module load
-loadConfig()
+LoadConfig()
 
 ----------------------------------------------------------------------
 -- Export configuration functions
 ----------------------------------------------------------------------
 
 return {
-    getConfig = getConfig,
-    getConfigValue = getConfigValue,
-    setConfigValue = setConfigValue,
-    toggleConfigValue = toggleConfigValue,
-    saveConfig = saveConfig,
-    loadConfig = loadConfig,
+    GetConfig = GetConfig,
+    GetConfigValue = GetConfigValue,
+    SetConfigValue = SetConfigValue,
+    ToggleConfigValue = ToggleConfigValue,
+    SaveConfig = SaveConfig,
+    LoadConfig = LoadConfig,
     DEFAULT_CONFIG = DEFAULT_CONFIG
 }
